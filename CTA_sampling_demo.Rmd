@@ -11,6 +11,11 @@ knitr::opts_chunk$set(echo = TRUE)
 This exercise is part of the course Data for Data Scientists taught at LSE's department of Methodology (current conveners: Tom Robinson and Dan De Kadt)
 
 # Selecting elements
+
+```{r}
+install.packages("rvest")
+```
+
 ```{r}
 library(tidyverse)
 library(rvest)
@@ -20,7 +25,7 @@ Let us use our simple self-made website to illustrate how elements of websites c
 
 ```{r}
 url <- "https://lse-my472.github.io/week05/data/website_5.html"
-html <- read_html(url)
+html <- read_html(url) ##creating url element , read_html(url) says to get all the html from the url 
 ```
 
 Next, let us scrape all paragraphs from our website. Recall that the CSS selector of a paragraph was "p".
@@ -39,7 +44,7 @@ relevant_elements
 If we want to return the text without HMTL tags, we can use the function "html_text()". For example, the first element has the following text:
 
 ```{r}
-html_text(relevant_elements[[1]])
+html_text(relevant_elements) ##[[2]] to identify which paragraph we want, element here is a paragraph
 ```
 
 We can return the texts of all paragraphs contained in the list with a loop:
@@ -47,7 +52,7 @@ We can return the texts of all paragraphs contained in the list with a loop:
 ```{r}
 for (i in 1:length(relevant_elements)) {
   
-  print(html_text(relevant_elements[[i]]))
+  print(html_text(relevant_elements[[i]])) ##for (i in 1:length(relevant_elements) means for each element within the sequence (from beginning to full length), then {} sets that we want   print(html_text(relevant_elements[[i]] to be executed within the for (i in 1:length(relevant_elements)). 
   
 }
 ```
@@ -87,7 +92,7 @@ Lastly, when inspecting an element and copying the CSS selector in your browser,
 Scraping with this CSS selector yields the correct element from our website:
 
 ```{r, eval=FALSE, echo=TRUE}
-relevant_elements <- html_elements(html, css = 'tba')
+relevant_elements <- html_elements(html, css = 'body > div.division-two > p:nth-child(2)')
 html_text(relevant_elements[[1]])
 ```
 
@@ -130,7 +135,7 @@ str(tab)
 # Website only had one table -> list of length 1 containing the dataframe
 
 # Save the dataframe (tibble)
-social_security_data <- tab[[1]]
+social_security_data <- tab[[1]] ##just one table
 social_security_data <- as_tibble(social_security_data)
 social_security_data
 ```
@@ -171,6 +176,7 @@ html <- read_html(url)
 tables <- html_table(html, fill=TRUE)
 class(tables)
 length(tables)
+print(tables)
 ```
 
 The function returns 10 different tables (checked 12/03/2024). The option `fill=TRUE` is used because some of the tables appear to have incomplete rows.
@@ -257,9 +263,10 @@ Note: Using `RSelenium` usually requires Java DK. First, try to see whether it i
 
 Loading the Selenium package:
 ```{r}
-#install.packages("RSelenium") -- run once to install the package on your computer
+install.packages("RSelenium")#run once to install the package on your computer
+install.packages("dvman")
 library("RSelenium")
-#install.packages("netstat") -- this is optional, to allow the use of free_port()
+install.packages("netstat") #this is optional, to allow the use of free_port()
 library("netstat")
 ```
 
@@ -267,7 +274,7 @@ Launching the driver and browser (if the port is already in use, choose a differ
 
 ```{r}
 # note that we use 'chromever = NULL' as chrome drivers seem to be buggy as of 11/6/23
-rD <- rsDriver(browser=c("firefox"), port = free_port(random = TRUE), chromever = NULL) 
+rD <- rsDriver(browser=c("firefox"), port = free_port(random = TRUE), chromever = NULL) #rsDriver creates a driver uisng firefox browser 
 driver <- rD$client
 ```
 
