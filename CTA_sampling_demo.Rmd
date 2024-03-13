@@ -1,0 +1,392 @@
+---
+title: "Computational Text Analysis: Sampling text demo"
+author: "Marion Lieutaud"
+date: "3/12/2024"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+This exercise is part of the course Data for Data Scientists taught at LSE's department of Methodology (current conveners: Tom Robinson and Dan De Kadt)
+
+# Selecting elements
+```{r}
+library(tidyverse)
+library(rvest)
+```
+
+Let us use our simple self-made website to illustrate how elements of websites can be selected and scraped. First, let us read the HTML content of the site:
+
+```{r}
+url <- "https://lse-my472.github.io/week05/data/website_5.html"
+html <- read_html(url)
+```
+
+Next, let us scrape all paragraphs from our website. Recall that the CSS selector of a paragraph was "p".
+
+```{r}
+relevant_elements <- html_elements(html, css = "p")
+length(relevant_elements)
+```
+
+The list has length 5, i.e. we obtain 5 nodes as there are 5 paragraphs in our website. In more detail:
+
+```{r}
+relevant_elements
+```
+
+If we want to return the text without HMTL tags, we can use the function "html_text()". For example, the first element has the following text:
+
+```{r}
+html_text(relevant_elements[[1]])
+```
+
+We can return the texts of all paragraphs contained in the list with a loop:
+
+```{r}
+for (i in 1:length(relevant_elements)) {
+  
+  print(html_text(relevant_elements[[i]]))
+  
+}
+```
+
+Now imagine we do not want to scrape all paragraph texts. Fortunately, paragraphs (or more likely other elements) about certain topics could have been assigned different class names by the developers who built the website. In our example, we made up a class for paragraphs that could discuss topics in web scraping, the associated class was "text-about-web-scraping". In CSS selector notation this is ".text-about-web-scraping". We can scrape only these paragraphs with:
+
+```{r}
+relevant_elements <- html_elements(html, css = ".text-about-web-scraping")
+relevant_elements
+```
+
+```{r}
+# Printing all elements
+for (i in 1:length(relevant_elements)) {
+  
+  print(html_text(relevant_elements[[i]]))
+  
+}
+```
+
+Similarly, we can scrape the content from only the second division container. We had given it a class name of "division-two", so in CSS selector notation it is called ".division-two":
+
+```{r}
+relevant_elements <- html_elements(html, css = ".division-two")
+length(relevant_elements)
+```
+
+In fact, only one node is returned in the list. It is the correct division container with text:
+
+```{r}
+html_text(relevant_elements[[1]])
+```
+
+Lastly, when inspecting an element and copying the CSS selector in your browser, often a so called pseudo class is returned which names the nth child of a parent element. Conceptually, this makes use of the tree representation of such documents. For example, let us select and scrape only the first paragraph in the second division. "Inspect element" (in Firefox) yields exactly such a type of CSS selector ".division-two > p:nth-child(2)". This simply means that the paragraph of interest is the second child of the division parent element "div" which we previously named "division two". Thinking of our website as a tree, what is the first child of this parent element?
+
+*Replace 'tba'in code chunk underneath with the appropriate selector*
+Scraping with this CSS selector yields the correct element from our website:
+
+```{r, eval=FALSE, echo=TRUE}
+relevant_elements <- html_elements(html, css = 'tba')
+html_text(relevant_elements[[1]])
+```
+
+
+
+
+
+# Scraping tables
+
+### Scraping web data in table format
+
+The goal of this exercise is to scrape the counts of social security number applicants by year in the US, and then clean the data so that we can generate a plot showing the evolution in this variable over time.
+
+The first step is to read the html code from the website we want to scrape using the `read_html()` function. If we want to see the html in text format, we can then use `html_text()`.
+
+```{r}
+url <- "https://www.ssa.gov/oact/babynames/numberUSbirths.html"
+# Storing the url's HTML code
+html_content <- read_html(url)
+```
+
+
+```{r}
+# Not very informative
+str(html_content)
+print(html_content)
+# Looking at first 1000 characters
+substr(html_content, 1, 1000)
+```
+
+To extract all the tables in the html code automatically, we use `html_table()`. Note that it returns a list of data frames which has length 1 here as there is only one table on this website.
+
+```{r}
+
+# Extracting tables in the document
+tab <- html_table(html_content, fill = TRUE)
+
+# Check object
+str(tab)
+# Website only had one table -> list of length 1 containing the dataframe
+
+# Save the dataframe (tibble)
+social_security_data <- tab[[1]]
+social_security_data <- as_tibble(social_security_data)
+social_security_data
+```
+
+Now let us clean the data so that we can use it for our analysis. We need to convert the population values into a numeric format, which requires deleting the commas. We will also change the variable names so that it is easier to work with them.
+
+```{r}
+## Remove commas and then make variable numeric
+social_security_data$Male <-  as.numeric(gsub(",", "", social_security_data$Male))
+social_security_data$Female <- as.numeric(gsub(",", "", social_security_data$Female))
+social_security_data$Total <- as.numeric(gsub(",", "", social_security_data$Total))
+
+## Rename variables
+colnames(social_security_data) <- c('year', 'male', 'female', 'total')
+```
+
+Now we can plot to see how the number of people applying for a Social Security Number in the US has increased over time (using `ggplot2` requires the data to be in a tidy long format):
+
+```{r}
+# Pivot longer function
+social_security_data_long <- pivot_longer(data = social_security_data[, 1:3],
+  cols = c("male", "female"), names_to = "sex", values_to = "individuals")
+
+# Creating the plot
+ggplot(social_security_data_long) +
+  aes(x = year, y = individuals, group = sex, colour = sex) +
+  geom_line() + xlab("Year") + ylab("Individuals") +
+  scale_colour_manual(name ="Birth Sex", values = c(1, 2), labels = c("Female", "Male"))
+```
+
+### Scraping web data in table format: A more advanced example
+
+When there are multiple tables on the website, scraping them becomes a bit more complicated. Let's work through an exemplary scenario: Scraping a table from Wikipedia with a list of the most populated cities in the United States.
+
+```{r}
+url <- "https://en.wikipedia.org/wiki/List_of_United_States_cities_by_population"
+html <- read_html(url)
+tables <- html_table(html, fill=TRUE)
+class(tables)
+length(tables)
+```
+
+The function returns 10 different tables (checked 12/03/2024). The option `fill=TRUE` is used because some of the tables appear to have incomplete rows.
+
+One option is to go through these tables in this list manually and select the correct one:
+
+```{r}
+tables[3] # position 3 happens to be the correct table (checked 12/03/2024)
+```
+
+Alternatively, the table of interest can be identified directly with a right-click and "Inspect" or "Inspect Element" in the browser. Clicking on the relevant part of the page's code, then right-click 'copy' and select (in this case) 'CSS selector'.
+
+CSS selector: table.sortable:nth-child(30) (extracted with Firefox "Inspect Element" on 12/03/2024)
+
+An alternative option is to look at the full source code of the website. In Google Chrome e.g., go to _View_ > _Developer_ > _View Source_. All browsers should have similar options to view the source code of a website. In the source code, search for the text of the page (e.g. _2022 rank_). Right above it you will see: `<table class="wikitable sortable ..." ...>`. This is the CSS selector. Using this selector, however, might still return several tables.
+
+Now that we know what we're looking for, let's use `html_elements()` to identify all the elements of the page that have that CSS class (note that we use a dot before the name of the class because the R function expects CSS notation). Whereas we will find several elements with the CSS selector ".wikitable" which we would have to search subsequently, we will only find one with the very specific selector obtained with inspect element.
+
+*Replace 'tba'in code chunk underneath with the appropriate selector*
+
+```{r}
+table_raw <- html_elements(html, css = 'tba')
+length(table_raw) # now a list of length 1
+```
+
+Transforming into a tibble with `html_table()`:
+
+```{r}
+data_pop <- html_table(table_raw[[1]], fill = TRUE)
+data_pop
+```
+
+As in the previous case, we still need to clean the data before we can use it. For this particular example, let's see if this dataset provides evidence in support of [Zipf's law for population ranks](https://en.wikipedia.org/wiki/Zipf%27s_law). Keeping only the columns of interest and transforming into a tibble:
+
+```{r}
+data_pop <- data_pop %>%
+  select("City", "2022estimate") %>%
+  filter(row_number() != 1) %>% # removing first row as it repeats the header
+  mutate(`2022rank` = row_number()) # using the row number as rank since the table is ranked
+```
+
+Renaming and cleaning columns:
+
+```{r}
+# Renaming the columns
+data_pop <- rename(data_pop, city_name = "City",
+                   rank = "2022rank",
+                   population = "2022estimate")
+
+# Removing superscripts in the city names
+data_pop$city_name <- gsub("\\[.*\\]", "", data_pop$city_name)
+
+# Removes commas and transform population figures into numbers
+data_pop$population <- as.numeric(gsub(",", "", data_pop$population))
+
+data_pop
+```
+
+Now we're ready to generate the figure:
+
+```{r}
+p <- ggplot(data_pop, aes(x=rank, y=population, label=city_name)) +
+  geom_point() + geom_text(hjust=-.1, size=3) +
+	scale_x_log10("log(rank)") + 
+  scale_y_log10("log(population)", labels=scales::comma) +
+  theme_minimal()
+p
+```
+
+These power laws (https://en.wikipedia.org/wiki/Power_law) are remarkably general. For example, have a look how the first 10 million words in 30 Wikipedias (dumps from October 2015): https://en.wikipedia.org/wiki/Zipf%27s_law#/media/File:Zipf_30wiki_en_labels.png
+
+Side note: We can also try to get an idea whether the distribution follows Zipf's law by estimating a log-log linear regression.
+
+```{r}
+summary(lm(log(rank) ~ log(population), data = data_pop))
+```
+
+
+# Dynamic scraping
+
+### RSelenium
+
+Note: Using `RSelenium` usually requires Java DK. First, try to see whether it is already installed on your computer - only install `RSelenium` with `install.packages("RSelenium")` and try to run the code in this document. If that does not work properly, next try to install Java DK. You can download the current version from here: https://www.oracle.com/java/technologies/downloads/. After its installation, restart RStudio.
+
+Loading the Selenium package:
+```{r}
+#install.packages("RSelenium") -- run once to install the package on your computer
+library("RSelenium")
+#install.packages("netstat") -- this is optional, to allow the use of free_port()
+library("netstat")
+```
+
+Launching the driver and browser (if the port is already in use, choose a different number with four digits, e.g. `rsDriver(browser=c("firefox"), port = 1234L)`). Alternatively -- as we do here -- choose a random free port using `netstat:free_port`. This code will now open what we call a 'marionette' browser (you can figure out why). Do not close this browser window!
+
+```{r}
+# note that we use 'chromever = NULL' as chrome drivers seem to be buggy as of 11/6/23
+rD <- rsDriver(browser=c("firefox"), port = free_port(random = TRUE), chromever = NULL) 
+driver <- rD$client
+```
+
+Key Selenium functions: click, find content, enter content, press 'ENTER'
+```{r, eval=FALSE, echo = TRUE}
+some_element$clickElement()
+```
+
+Find element (e.g. a search box)
+```{r, eval = FALSE, echo = TRUE}
+search_box <- driver$findElement(using = "xpath", value = '...')
+```
+
+Enter some text
+```{r, eval = FALSE, echo = TRUE}
+search_box$sendKeysToElement(list("some text"))
+```
+
+Press enter key
+```{r, eval = FALSE, echo = TRUE}
+search_box$sendKeysToElement(list(key = "enter"))
+```
+
+
+### Selenium example with Edinburgh Uni
+
+Create browser instance with·
+```{r, eval=FALSE}
+# don't run this if you've already opened a marionnette browser
+rD <- rsDriver(browser=c("firefox"), chromever = NULL)
+driver <- rD$client
+```
+
+Navigate to url
+```{r}
+driver$navigate("https://www.ed.ac.uk/finance/transparency/foi/investments")
+```
+
+We need to deal with pop up on cookies. 
+First we need to select our cookies settings
+```{r}
+cookies_tick1 <- driver$findElement(using = "css", value = "#edgel-cookie-setting-2")
+
+cookies_tick1$clickElement()
+
+Sys.sleep(1) # give it some time
+
+cookies_tick2 <- driver$findElement(using = "css", value = "#edgel-cookie-setting-4")
+
+cookies_tick2$clickElement()
+```
+
+Then we need to press 'save settings' at the end.
+```{r}
+cookiessavebox <- driver$findElement(using = "css", value = ".cookie-btn")
+
+cookiessavebox$clickElement()
+# done
+```
+
+Compare Xpaths
+```{r}
+#"/html/body/div[6]/div/div[2]/div[2]/section/div[2]/div/div/a"
+#"/html/body/div[6]/div/div[2]/div[2]/section/div[9]/div/div/a"
+
+investments_list <- "/html/body/div[6]/div/div[2]/div[2]/section/div[*]/div/div/a"
+```
+
+### Exercise: Google search
+
+Navigate to the Google website
+```{r}
+url <- "https://www.google.com/"
+driver$navigate(url)
+```
+
+Since recently there can be new privacy terms that have to be accepted once in some regions.
+
+Side note: Some such cases with pop-up windows on websites might require frame switching (although it seems that the 2023 version of Google does not require this at the moment). Should the code below not run on your computer after you have entered the correct XPath, try to uncomment the `swithToFrame` functions. As the the window is in the foreground, it can be that we have to switch the frame. Without this switching of the frame, we might not be able to click on the right element. Whether switching the frame is necessary depends on the design of the underlying website which can change.
+
+As an exercise, the XPaths of the relevant elements have to be obtained with the Inspect function of the browser and then be pasted into this code replacing the 'tba'.
+
+```{r, eval = FALSE, echo = TRUE}
+#driver$switchToFrame(0) # can be un-commented and tried if code does not run
+
+# note the use of single quotes around 'tba' -- this is because the xpath will sometimes include double quotes. if you have double quotes inside a string, you need to use single quotes to define the extent of the string.
+agree_button <- driver$findElement(using = "xpath", value = 'tba')
+agree_button$clickElement()
+
+#driver$switchToFrame(1)
+```
+
+
+```{r, eval = FALSE, echo = TRUE}
+search_field <- driver$findElement(using = "xpath", value = 'tba')
+search_field$sendKeysToElement(list("University of Edinburgh"))
+Sys.sleep(1)
+search_field$sendKeysToElement(list(key = "enter"))
+```
+
+And navigate to the University of Edinburgh website by clicking on the first link of the search results:
+
+```{r, eval = FALSE, echo = TRUE}
+first_link <- driver$findElement(using = "xpath", value = 'tba')
+first_link$clickElement()
+```
+
+Lastly, let us close the driver and browser:
+
+```{r}
+# close the Rselenium processes:
+driver$close()
+rD$server$stop()
+
+# close the associated Java processes (if using Mac or Linux this may not be necessary -- Google for correct command)
+#system("taskkill /im java.exe /f", intern=FALSE, ignore.stdout=FALSE)
+```
+
+
+### More in-depth example
+[Scraping using Selenium: MY472 Data for data scientists (LSE)](https://lse-my472.github.io/week07/03-selenium-lse.Rmd)
+
